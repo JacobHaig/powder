@@ -130,7 +130,7 @@ fn rect_partical(grid: &mut grid::Grid, x: i32, y: i32) {
     //new.partical_type = random_partical(0, 4);
     new.partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
 
-    let radius = 25;
+    let radius = 10;
 
     for yy in -radius..radius {
         for xx in -radius..radius {

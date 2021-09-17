@@ -3,8 +3,8 @@ use rand::prelude::SliceRandom;
 // GRID width and height ratio should be
 // the same as Window width and height
 
-pub const WINDOW_WIDTH: usize = 2000;
-pub const WINDOW_HEIGHT: usize = 1000;
+pub const WINDOW_WIDTH: usize = 1000;
+pub const WINDOW_HEIGHT: usize = 500;
 
 pub const GRID_WIDTH: usize = 500;
 pub const GRID_HEIGHT: usize = 250;
