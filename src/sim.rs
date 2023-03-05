@@ -1,120 +1,143 @@
-use std::slice::GroupBy;
+use rand::Rng;
 
-use rand::{prelude::SliceRandom, Rng};
+use crate::map::{self};
 
-use crate::grid::{self, Change, Partical, ParticalType};
+// Bresenham's line algorithm - only integer arithmetic
+fn line(x0: isize, y0: isize, x1: isize, y1: isize) -> Vec<(isize, isize)> {
+    let mut result = Vec::with_capacity(16);
 
-fn simulate_sand(grid: &mut grid::Grid, x: isize, y: isize) {
-    // If there is a point directly down
-    // we want to move there first.
-    let mut success;
-    success = grid.checked_swap_cell(x, y, x, y + 1);
+    let dx = (x1 - x0).abs();
+    let dy = (y1 - y0).abs();
 
-    // The reason we split the probablity to go left or right
-    // is to create a more uniform distrobution of particals
-    if !success {
-        let mut gen = rand::thread_rng();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let sy = if y0 < y1 { 1 } else { -1 };
 
-        if gen.gen_bool(0.5) {
-            grid.checked_swap_cell(x, y, x + 1, y + 1);
-            // if !success {
-            //     success = grid.checked_swap_cell(x, y, x - 1, y + 1);
-            // }
-        } else {
-            grid.checked_swap_cell(x, y, x - 1, y + 1);
-            // if !success {
-            //     success = grid.checked_swap_cell(x, y, x + 1, y + 1);
-            // }
+    let mut x = x0;
+    let mut y = y0;
+    let mut err = dx - dy;
+
+    while x != x1 || y != y1 {
+        result.push((x, y));
+        let e2 = 2 * err;
+
+        if e2 > -dy {
+            err -= dy;
+            x += sx;
+        }
+
+        if e2 < dx {
+            err += dx;
+            y += sy;
         }
     }
+
+    result.push((x1, y1));
+    result
 }
 
-fn simulate_water(grid: &mut grid::Grid, x: isize, y: isize) {
-    // If there is a point directly down
-    // we want to move there first.
+fn apply_force(grid: &mut map::Map, x: isize, y: isize) {
+    let partical = grid.get_mut_partical_at(x, y).unwrap();
 
-    let mut success;
-    success = grid.checked_swap_cell(x, y, x, y + 1);
+    partical.velocity.vy -= 2.0; // Gravity
+                                 // partical.velocity.vx += -1.0;
 
-    // The reason we split the probablity to go left or right
-    // is to create a more uniform distrobution of particals
-    if !success {
-        let mut gen = rand::thread_rng();
+    let dest_x = x + partical.velocity.vx as isize;
+    let dest_y = y + partical.velocity.vy as isize;
 
-        // If there is a point to the left or right
-        // we want to move there last
-        if gen.gen_bool(0.5) {
-            grid.checked_swap_cell(x, y, x + 1, y);
-            //grid.checked_swap_cell(x, y, x - 1, y);
-        } else {
-            grid.checked_swap_cell(x, y, x - 1, y);
-            //grid.checked_swap_cell(x, y, x + 1, y);
-        }
+    // dbg!(x, y, dest_x, dest_y);
+
+    for window in line(x, y, dest_x, dest_y).windows(2) {
+        // dbg!("aaaahhh");
+        let x1 = window[0].0;
+        let y1 = window[0].1;
+        let x2 = window[1].0;
+        let y2 = window[1].1;
+
+        if grid.swap_checked(x1, y1, x2, y2).is_none() {
+            return;
+        };
     }
+
+    // grid.swap(x, y, dest_x, dest_y);
 }
 
-fn simulate_smoke(grid: &mut grid::Grid, x: isize, y: isize) {
-    // If there is a point directly up
-    // we want to move there first.
+fn simulate_sand(grid: &mut map::Map, x: isize, y: isize) {
+    let is_grounded = grid.is_occupied(x, y - 1);
+    let is_occupied_left = grid.is_occupied(x - 1, y - 1);
+    let is_occupied_right = grid.is_occupied(x + 1, y - 1);
 
-    let mut success;
-    success = grid.checked_swap_cell(x, y, x, y - 1);
+    let partical = grid.get_mut_partical_at(x, y).unwrap();
 
-    // The reason we split the probablity to go left or right
-    // is to create a more uniform distrobution of particals
-    if !success {
-        let mut gen = rand::thread_rng();
+    if is_grounded {
+        partical.velocity.vy = 0.0;
 
-        // If there is a point to the left or right
-        // we want to move there last
-        if gen.gen_bool(0.5) {
-            grid.checked_swap_cell(x, y, x + 1, y);
-            //grid.checked_swap_cell(x, y, x - 1, y);
-        } else {
-            grid.checked_swap_cell(x, y, x - 1, y);
-            //grid.checked_swap_cell(x, y, x + 1, y);
-        }
-    }
-}
-
-fn simulate_fire(grid: &mut grid::Grid, x: isize, y: isize) {
-    let mut gen = rand::thread_rng();
-
-    // spread fire
-    get_neighbors(1, 1, false).iter().for_each(|(xx, yy)| {
-        if gen.gen_bool(0.01) {
-            if grid
-                .get_at(x + xx, y + yy)
-                .unwrap_or(&Partical::default())
-                .partical_type
-                == grid::ParticalType::Wood
-            {
-                let p = Partical {
-                    partical_type: grid::ParticalType::Fire,
-                };
-
-                grid.checked_set_cell(p, x + xx, y + yy);
+        match (is_occupied_left, is_occupied_right) {
+            (true, false) => {
+                partical.velocity.vx = 1.0;
             }
-        }
-    });
-
-    // Randomly change a fire partical to smoke
-    if gen.gen_bool(0.01) {
-        // 25% chance to set the fire to smoke
-        if gen.gen_bool(0.25) {
-            let p = Partical {
-                partical_type: grid::ParticalType::Smoke,
-            };
-            grid.checked_set_cell(p, x, y);
-
-        // 75% chance to set the fire to smoke
-        } else {
-            let p = Partical {
-                partical_type: grid::ParticalType::Air,
-            };
-            grid.checked_set_cell(p, x, y);
-        }
+            (false, true) => {
+                partical.velocity.vx = -1.0;
+            }
+            (false, false) => {
+                if rand::thread_rng().gen_bool(0.5) {
+                    partical.velocity.vx = 1.0;
+                } else {
+                    partical.velocity.vx = -1.0;
+                }
+            }
+            (true, true) => return,
+        };
     }
+
+    apply_force(grid, x, y);
+
+    // if grid.is_empty(x, y - 1) {
+    //     grid.swap(x, y, x, y - 1);
+    //     return;
+    // }
+
+    // match (grid.is_empty(x - 1, y - 1), grid.is_empty(x + 1, y - 1)) {
+    //     (true, false) => {
+    //         grid.swap(x, y, x - 1, y - 1);
+    //     }
+    //     (false, true) => {
+    //         grid.swap(x, y, x + 1, y - 1);
+    //     }
+    //     (true, true) => {
+    //         let mut gen = rand::thread_rng();
+    //         if gen.gen_bool(0.5) {
+    //             grid.swap(x, y, x - 1, y - 1);
+    //         } else {
+    //             grid.swap(x, y, x + 1, y - 1);
+    //         }
+    //     }
+    //     _ => {}
+    // }
+
+    // let partical = grid.get_partical_at(x, y).unwrap();
+
+    // let partical = grid.get_mut_partical_at(x, y).unwrap();
+    // if is_grounded {
+    //     partical.velocity.vy = 0.0;
+    // }
+
+    // if is_occupied_left {
+    //     // Cancel leftward motion
+    //     partical.velocity.vy = clamp(partical.velocity.vy, 0.0, f32::MAX);
+    // }
+    // if is_occupied_right {
+    //     // Cancel rightward motion
+    //     partical.velocity.vy = clamp(partical.velocity.vy, f32::MIN, 0.0);
+    // }
+}
+
+fn simulate_water(_grid: &mut map::Map, _x: isize, _y: isize) {}
+
+fn simulate_smoke(_grid: &mut map::Map, _x: isize, _y: isize) {}
+
+fn simulate_fire(_grid: &mut map::Map, _x: isize, _y: isize) {
+    let mut gen = rand::thread_rng();
+    if gen.gen_bool(0.01) {}
 }
 
 pub fn get_neighbors(width: isize, height: isize, include_center: bool) -> Vec<(isize, isize)> {
@@ -132,60 +155,89 @@ pub fn get_neighbors(width: isize, height: isize, include_center: bool) -> Vec<(
     neighbors
 }
 
-pub fn simulate_points(grid: &mut grid::Grid) {
-    for y in (0..grid::GRID_HEIGHT).rev() {
-        for x in 0..grid::GRID_WIDTH {
-            let p: &mut grid::Partical = grid.get_mut_at(x as isize, y as isize).unwrap();
+pub fn update(grid: &mut map::Map) {
+    // grid.grid.iter().rev().flatten()
+    for y in 0..map::GRID_HEIGHT {
+        for x in 0..map::GRID_WIDTH {
+            if let Some(partical) = grid.get_mut_partical_at(x as isize, y as isize) {
+                if partical.is_updated {
+                    continue;
+                }
 
-            match p.partical_type {
-                grid::ParticalType::Air => {}
-                grid::ParticalType::Sand => simulate_sand(grid, x as isize, y as isize),
-                grid::ParticalType::Rock => {}
-                grid::ParticalType::Water => simulate_water(grid, x as isize, y as isize),
-                grid::ParticalType::Wood => {}
-                grid::ParticalType::Fire => simulate_fire(grid, x as isize, y as isize),
-                grid::ParticalType::Smoke => simulate_smoke(grid, x as isize, y as isize),
+                partical.is_updated = true;
+
+                match partical.partical_type {
+                    map::ParticalType::Air => {}
+                    map::ParticalType::Sand => simulate_sand(grid, x as isize, y as isize),
+                    map::ParticalType::Rock => {}
+                    map::ParticalType::Water => simulate_water(grid, x as isize, y as isize),
+                    map::ParticalType::Wood => {}
+                    map::ParticalType::Fire => simulate_fire(grid, x as isize, y as isize),
+                    map::ParticalType::Smoke => simulate_smoke(grid, x as isize, y as isize),
+                }
             }
         }
     }
+
+    for p in grid.particals.iter_mut() {
+        p.is_updated = false;
+    }
 }
 
-pub fn update(grid: &mut grid::Grid) {
-    let mut rng = rand::thread_rng();
+// fn bi_directional_range(range: std::ops::Range<isize>) -> impl Iterator<Item = isize> {
 
-    // Sort the list of changes so that the destination is ordered
-    grid.sort_by_destination();
+//     let step = if range.start > range.end { -1 } else { 1 };
+//     (0..=(range.end - range.start).abs() as usize)
+//         .map(move |i| range.start + (i as isize) * step)
+// }
 
-    // Group all 'same' destinations in to a list
-    // group_by is a Nightly feature
-    let groups = grid.cell_changes.group_by(|a, b| {
-        // When comparing, we need to take just the destination
-        // from the `change` enum. Then compare by that feild.
-        let c = match a {
-            Change::Swap(_, _, x, y) => grid::get_index(*x, *y),
-            Change::Set(_, x, y) => grid::get_index(*x, *y),
-        };
-        let d = match b {
-            Change::Swap(_, _, x, y) => grid::get_index(*x, *y),
-            Change::Set(_, x, y) => grid::get_index(*x, *y),
-        };
+trait BiDirectionalRange {
+    fn bi_directional_range(self) -> Box<dyn Iterator<Item = isize>>;
+}
 
-        c == d
-    });
-
-    // Then pick a random destination from each list
-    // and create a new list. Now, we should have only
-    // one change for each cell in the grid.
-    let changes: Vec<grid::Change> = groups.map(|g| *g.choose(&mut rng).unwrap()).collect();
-
-    // Apply the changes to the grid.
-    for change in changes {
-        match change {
-            Change::Swap(x1, y1, x2, y2) => grid.swap(x1, y1, x2, y2).unwrap(),
-            Change::Set(p, x, y) => grid.set_at(x, y, p).unwrap(),
-        }
+impl BiDirectionalRange for std::ops::Range<isize> {
+    fn bi_directional_range(self) -> Box<dyn Iterator<Item = isize>> {
+        let step = if self.start > self.end { -1 } else { 1 };
+        Box::new(
+            (0..=(self.end - self.start).unsigned_abs())
+                .map(move |i| self.start + (i as isize) * step),
+        )
     }
+}
 
-    // Remove changes from cell_changes vec
-    grid.cell_changes.clear();
+#[test]
+fn bi_directional_range_test() {
+    let test: Vec<isize> = (10..5).bi_directional_range().collect();
+    let exp = [10, 9, 8, 7, 6, 5];
+    assert_eq!(test, exp);
+
+    let test: Vec<isize> = (10..5).collect();
+    let exp = [];
+    assert_eq!(test, exp);
+}
+
+#[test]
+fn line_test_vertical_down() {
+    let test = line(0, 1, 0, -5);
+    let exp = vec![(0, 1), (0, 0), (0, -1), (0, -2), (0, -3), (0, -4), (0, -5)];
+    assert_eq!(test, exp);
+}
+#[test]
+fn line_test_vertical_up() {
+    let test = line(0, -1, 0, 3);
+    let exp = vec![(0, -1), (0, 0), (0, 1), (0, 2), (0, 3)];
+    assert_eq!(test, exp);
+}
+#[test]
+fn line_test_right_up() {
+    let test = line(0, -1, 2, 3);
+    let exp = vec![(0, -1), (0, 0), (1, 1), (1, 2), (2, 3)];
+    assert_eq!(test, exp);
+}
+
+#[test]
+fn line_test_left_down() {
+    let test = line(0, -1, -5, -3);
+    let exp = vec![(0, -1), (-1, -1), (-2, -2), (-3, -2), (-4, -3), (-5, -3)];
+    assert_eq!(test, exp);
 }
