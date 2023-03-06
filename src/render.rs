@@ -6,7 +6,7 @@ use sdl2::video::Window;
 use std::usize;
 
 use crate::map;
-use crate::map::ParticalType;
+use crate::map::Map;
 
 fn draw_pixel(canvas: &mut Canvas<Window>, x: i32, y: i32) {
     canvas.set_draw_color(Color::RGB(255, 255, 255));
@@ -18,61 +18,57 @@ fn draw_pixel(canvas: &mut Canvas<Window>, x: i32, y: i32) {
 const COLORS: usize = 4;
 const SIZE: usize = map::GRID_WIDTH * map::GRID_HEIGHT * COLORS;
 
-fn grid_to_pixels(grid: &map::Map) -> [u8; SIZE] {
-    let mut pixel: [u8; SIZE] = [0; SIZE];
+fn grid_to_pixels(grid: &Map) -> Vec<u8> {
+    let mut pixel = vec![0; SIZE];
 
-    for (i, ele) in grid
+    for (index, ele) in grid
         .grid
         .iter()
         .rev()
         .flatten()
-        .map(|f| {
-            if *f == 0 {
-                &ParticalType::Air
-            } else {
-                &grid.get_partical(*f).unwrap().partical_type
-            }
-        })
+        .map(|b_partical| &b_partical.partical_type)
         .enumerate()
     {
+        let step = index * COLORS;
+
         match ele {
             map::ParticalType::Air => {
-                pixel[i * COLORS] = 255; // RED
-                pixel[i * COLORS + 1] = 255; // GREEN
-                pixel[i * COLORS + 2] = 255; // BLUE
-                                             // pixel[i * COLORS + 3] = 000;  ALPHA
+                pixel[step] = 255; // RED
+                pixel[step + 1] = 255; // GREEN
+                pixel[step + 2] = 255; // BLUE
+                                       // pixel[i * COLORS + 3] = 000;  ALPHA
             }
             map::ParticalType::Sand => {
-                pixel[i * COLORS] = 192;
-                pixel[i * COLORS + 1] = 178;
-                pixel[i * COLORS + 2] = 128;
+                pixel[step] = 192;
+                pixel[step + 1] = 178;
+                pixel[step + 2] = 128;
                 // pixel[i * COLORS + 3] = 000;
             }
 
             map::ParticalType::Rock => {
-                pixel[i * COLORS] = 135;
-                pixel[i * COLORS + 1] = 135;
-                pixel[i * COLORS + 2] = 135;
+                pixel[step] = 135;
+                pixel[step + 1] = 135;
+                pixel[step + 2] = 135;
             }
             map::ParticalType::Water => {
-                pixel[i * COLORS] = 0;
-                pixel[i * COLORS + 1] = 50;
-                pixel[i * COLORS + 2] = 255;
+                pixel[step] = 0;
+                pixel[step + 1] = 50;
+                pixel[step + 2] = 255;
             }
             map::ParticalType::Wood => {
-                pixel[i * COLORS] = 54;
-                pixel[i * COLORS + 1] = 38;
-                pixel[i * COLORS + 2] = 27;
+                pixel[step] = 54;
+                pixel[step + 1] = 38;
+                pixel[step + 2] = 27;
             }
             map::ParticalType::Fire => {
-                pixel[i * COLORS] = 226;
-                pixel[i * COLORS + 1] = 88;
-                pixel[i * COLORS + 2] = 34;
+                pixel[step] = 226;
+                pixel[step + 1] = 88;
+                pixel[step + 2] = 34;
             }
             map::ParticalType::Smoke => {
-                pixel[i * COLORS] = 115;
-                pixel[i * COLORS + 1] = 130;
-                pixel[i * COLORS + 2] = 118;
+                pixel[step] = 115;
+                pixel[step + 1] = 130;
+                pixel[step + 2] = 118;
             }
         }
     }
@@ -80,7 +76,7 @@ fn grid_to_pixels(grid: &map::Map) -> [u8; SIZE] {
     pixel
 }
 
-pub fn draw_texture(canvas: &mut Canvas<Window>, grid: &map::Map) {
+pub fn draw_texture(canvas: &mut Canvas<Window>, grid: &Map) {
     let texture_creator = canvas.texture_creator();
 
     let mut texture = texture_creator
@@ -94,7 +90,9 @@ pub fn draw_texture(canvas: &mut Canvas<Window>, grid: &map::Map) {
 
     // &[255,255,0,255].repeat(WIDTH * HEIGHT)
 
+    // let now = std::time::Instant::now();
     let pixels = grid_to_pixels(grid);
+    // println!("{:.8?},", now.elapsed().as_secs_f32());
 
     texture
         .update(None, &pixels, map::GRID_WIDTH * 4)

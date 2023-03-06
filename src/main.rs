@@ -1,9 +1,9 @@
 #![feature(slice_group_by)]
 
+use map::Partical;
 use sdl2::pixels::Color;
 
 use std::mem::size_of;
-use std::time::Duration;
 
 use crate::event::Input;
 
@@ -46,11 +46,13 @@ pub fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
+    // const INIT: Box<Partical> = None;
+
     let mut map = map::Map {
-        grid: [[0u16; map::GRID_WIDTH]; map::GRID_HEIGHT],
-        particals: Vec::new(),
-        partical_index: 0,
+        grid: vec![vec![Partical::new(); map::GRID_WIDTH]; map::GRID_HEIGHT],
     };
+
+    dbg!(map.grid.len(), map.grid[0].len());
 
     dbg!(size_of::<map::ParticalType>());
     dbg!(size_of::<map::Partical>());
@@ -79,19 +81,20 @@ pub fn main() {
         input.keys = vec![];
 
         sim::update(&mut map);
-        render::draw_texture(&mut canvas, &map);
-        canvas.present();
 
-        std::thread::sleep(Duration::from_secs_f32(1.0 / 100.0));
+        // let now = std::time::Instant::now();
+        // println!("Elapsed: {:.8?}", now.elapsed().as_secs_f32());
+        render::draw_texture(&mut canvas, &map);
+
+        canvas.present();
     }
 }
 
 fn single_partical(grid: &mut map::Map, x: i32, y: i32) {
-    let id = grid.new_partical();
+    let mut partical = Partical::new();
+    partical.partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
 
-    grid.get_mut_partical(id).unwrap().partical_type = map::ParticalType::Sand;
-
-    grid.set_at(x as isize, y as isize, id);
+    grid.set_at(x as isize, y as isize, partical);
 }
 
 fn circle_partical(grid: &mut map::Map, x: i32, y: i32) {
@@ -100,12 +103,10 @@ fn circle_partical(grid: &mut map::Map, x: i32, y: i32) {
     for yy in -radius..radius {
         for xx in -radius..radius {
             if xx * xx + yy * yy < radius * radius {
-                let id = grid.new_partical();
+                let mut partical = Partical::new();
+                partical.partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
 
-                grid.get_mut_partical(id).unwrap().partical_type =
-                    unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
-
-                grid.set_at((x + xx) as isize, (y + yy) as isize, id);
+                grid.set_at((x + xx) as isize, (y + yy) as isize, partical);
             }
         }
     }

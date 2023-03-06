@@ -36,10 +36,10 @@ fn line(x0: isize, y0: isize, x1: isize, y1: isize) -> Vec<(isize, isize)> {
 }
 
 fn apply_force(grid: &mut map::Map, x: isize, y: isize) {
-    let partical = grid.get_mut_partical_at(x, y).unwrap();
+    let partical = grid.get_mut_at(x, y).unwrap();
 
     partical.velocity.vy -= 2.0; // Gravity
-                                 // partical.velocity.vx += -1.0;
+    // partical.velocity.vx += -4.0;
 
     let dest_x = x + partical.velocity.vx as isize;
     let dest_y = y + partical.velocity.vy as isize;
@@ -47,7 +47,6 @@ fn apply_force(grid: &mut map::Map, x: isize, y: isize) {
     // dbg!(x, y, dest_x, dest_y);
 
     for window in line(x, y, dest_x, dest_y).windows(2) {
-        // dbg!("aaaahhh");
         let x1 = window[0].0;
         let y1 = window[0].1;
         let x2 = window[1].0;
@@ -62,11 +61,13 @@ fn apply_force(grid: &mut map::Map, x: isize, y: isize) {
 }
 
 fn simulate_sand(grid: &mut map::Map, x: isize, y: isize) {
-    let is_grounded = grid.is_occupied(x, y - 1);
-    let is_occupied_left = grid.is_occupied(x - 1, y - 1);
-    let is_occupied_right = grid.is_occupied(x + 1, y - 1);
+    let is_grounded = !grid.is_avalible(x, y - 1);
+    let is_occupied_left = !grid.is_avalible(x - 1, y - 1);
+    let is_occupied_right = !grid.is_avalible(x + 1, y - 1);
 
-    let partical = grid.get_mut_partical_at(x, y).unwrap();
+    // dbg!(is_grounded, is_occupied_left, is_occupied_right);
+
+    let partical = grid.get_mut_at(x, y).unwrap();
 
     if is_grounded {
         partical.velocity.vy = 0.0;
@@ -90,45 +91,6 @@ fn simulate_sand(grid: &mut map::Map, x: isize, y: isize) {
     }
 
     apply_force(grid, x, y);
-
-    // if grid.is_empty(x, y - 1) {
-    //     grid.swap(x, y, x, y - 1);
-    //     return;
-    // }
-
-    // match (grid.is_empty(x - 1, y - 1), grid.is_empty(x + 1, y - 1)) {
-    //     (true, false) => {
-    //         grid.swap(x, y, x - 1, y - 1);
-    //     }
-    //     (false, true) => {
-    //         grid.swap(x, y, x + 1, y - 1);
-    //     }
-    //     (true, true) => {
-    //         let mut gen = rand::thread_rng();
-    //         if gen.gen_bool(0.5) {
-    //             grid.swap(x, y, x - 1, y - 1);
-    //         } else {
-    //             grid.swap(x, y, x + 1, y - 1);
-    //         }
-    //     }
-    //     _ => {}
-    // }
-
-    // let partical = grid.get_partical_at(x, y).unwrap();
-
-    // let partical = grid.get_mut_partical_at(x, y).unwrap();
-    // if is_grounded {
-    //     partical.velocity.vy = 0.0;
-    // }
-
-    // if is_occupied_left {
-    //     // Cancel leftward motion
-    //     partical.velocity.vy = clamp(partical.velocity.vy, 0.0, f32::MAX);
-    // }
-    // if is_occupied_right {
-    //     // Cancel rightward motion
-    //     partical.velocity.vy = clamp(partical.velocity.vy, f32::MIN, 0.0);
-    // }
 }
 
 fn simulate_water(_grid: &mut map::Map, _x: isize, _y: isize) {}
@@ -159,7 +121,7 @@ pub fn update(grid: &mut map::Map) {
     // grid.grid.iter().rev().flatten()
     for y in 0..map::GRID_HEIGHT {
         for x in 0..map::GRID_WIDTH {
-            if let Some(partical) = grid.get_mut_partical_at(x as isize, y as isize) {
+            if let Some(partical) = grid.get_mut_at(x as isize, y as isize) {
                 if partical.is_updated {
                     continue;
                 }
@@ -174,12 +136,12 @@ pub fn update(grid: &mut map::Map) {
                     map::ParticalType::Wood => {}
                     map::ParticalType::Fire => simulate_fire(grid, x as isize, y as isize),
                     map::ParticalType::Smoke => simulate_smoke(grid, x as isize, y as isize),
-                }
+                };
             }
         }
     }
 
-    for p in grid.particals.iter_mut() {
+    for p in grid.grid.iter_mut().flatten() {
         p.is_updated = false;
     }
 }
