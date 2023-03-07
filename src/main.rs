@@ -1,9 +1,9 @@
 #![feature(slice_group_by)]
 
-use map::Partical;
+use map::{Partical, ParticalType};
 use sdl2::pixels::Color;
 
-use std::mem::size_of;
+use std::{mem::size_of, time::Duration};
 
 use crate::event::Input;
 
@@ -49,7 +49,7 @@ pub fn main() {
     // const INIT: Box<Partical> = None;
 
     let mut map = map::Map {
-        grid: vec![vec![Partical::new(); map::GRID_WIDTH]; map::GRID_HEIGHT],
+        grid: vec![vec![Partical::new(ParticalType::Air); map::GRID_WIDTH]; map::GRID_HEIGHT],
     };
 
     dbg!(map.grid.len(), map.grid[0].len());
@@ -78,7 +78,7 @@ pub fn main() {
                 }
             }
         }
-        input.keys = vec![];
+        input.keys.clear();
 
         sim::update(&mut map);
 
@@ -87,12 +87,14 @@ pub fn main() {
         render::draw_texture(&mut canvas, &map);
 
         canvas.present();
+
+        std::thread::sleep(Duration::from_secs_f32(1.0 / 100.0));
     }
 }
 
 fn single_partical(grid: &mut map::Map, x: i32, y: i32) {
-    let mut partical = Partical::new();
-    partical.partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
+    let partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
+    let partical = Partical::new(partical_type);
 
     grid.set_at(x as isize, y as isize, partical);
 }
@@ -103,10 +105,14 @@ fn circle_partical(grid: &mut map::Map, x: i32, y: i32) {
     for yy in -radius..radius {
         for xx in -radius..radius {
             if xx * xx + yy * yy < radius * radius {
-                let mut partical = Partical::new();
-                partical.partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
+                if let Some(p) = grid.get_at((x + xx) as isize, (y + yy) as isize) {
+                    let partical_type = unsafe { partical_from_u32(PARTICAL_TYPE_VALUE) };
+                    let partical = Partical::new(partical_type);
 
-                grid.set_at((x + xx) as isize, (y + yy) as isize, partical);
+                    if p.partical_type == ParticalType::Air {
+                        grid.set_at((x + xx) as isize, (y + yy) as isize, partical);
+                    }
+                }
             }
         }
     }

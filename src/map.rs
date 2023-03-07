@@ -1,3 +1,7 @@
+use rand::Rng;
+use sdl2::pixels::Color;
+// use crate::map::_IMPL_NUM_FromPrimitive_FOR_ParticalType::_num_traits::Saturating;
+
 pub const WINDOW_WIDTH: usize = 1000 * 2;
 pub const WINDOW_HEIGHT: usize = 500 * 2;
 
@@ -5,7 +9,6 @@ const A: usize = 1;
 
 pub const GRID_WIDTH: usize = 500 * A;
 pub const GRID_HEIGHT: usize = 250 * A;
-
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, FromPrimitive, Default)]
 pub enum ParticalType {
@@ -31,15 +34,56 @@ pub struct Partical {
     // pub lifetime
     pub velocity: Velocity,
     pub is_updated: bool,
+    pub color: Vec<u8>,
 }
 
 impl Partical {
-    pub fn new() -> Partical {
+    pub fn new(p_type: ParticalType) -> Partical {
         Partical {
             is_updated: false,
-            partical_type: ParticalType::default(),
+            color: color_lookup(&p_type),
+            partical_type: p_type,
             velocity: Velocity::default(),
         }
+    }
+}
+
+fn color_lookup(p_type: &ParticalType) -> Vec<u8> {
+    match p_type {
+        ParticalType::Air => vec![255, 255, 255]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10..1i8)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Sand => vec![192, 178, 128]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Rock => vec![135, 135, 135]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Water => vec![0, 50, 255]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Wood => vec![54, 38, 27]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Fire => vec![226, 88, 34]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
+
+        ParticalType::Smoke => vec![115, 130, 118]
+            .into_iter()
+            .map(|value: u8| value.saturating_add_signed(rand::thread_rng().gen_range(-10i8..10)))
+            .collect::<Vec<u8>>(),
     }
 }
 
@@ -135,4 +179,13 @@ impl Map {
 
         false
     }
+}
+
+#[test]
+fn test_saturating_add_on_unsigned() {
+    let a = 0u8.saturating_add_signed(-10i8);
+    let b = 255u8.saturating_add_signed(10i8);
+
+    assert_eq!(a, 0);
+    assert_eq!(b, 255);
 }

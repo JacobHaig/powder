@@ -1,6 +1,6 @@
 use rand::Rng;
 
-use crate::map::{self};
+use crate::map::{self, ParticalType};
 
 // Bresenham's line algorithm - only integer arithmetic
 fn line(x0: isize, y0: isize, x1: isize, y1: isize) -> Vec<(isize, isize)> {
@@ -35,65 +35,166 @@ fn line(x0: isize, y0: isize, x1: isize, y1: isize) -> Vec<(isize, isize)> {
     result
 }
 
-fn apply_force(grid: &mut map::Map, x: isize, y: isize) {
+// Takes the grid and a position then returns a list of points that
+// that partical will travel if not interrupted.
+fn apply_force(grid: &mut map::Map, x: isize, y: isize) -> Vec<(isize, isize)> {
     let partical = grid.get_mut_at(x, y).unwrap();
 
-    partical.velocity.vy -= 2.0; // Gravity
-    // partical.velocity.vx += -4.0;
+    const GRAVITY: f32 = 1.0;
+
+    partical.velocity.vy -= GRAVITY;
 
     let dest_x = x + partical.velocity.vx as isize;
     let dest_y = y + partical.velocity.vy as isize;
 
-    // dbg!(x, y, dest_x, dest_y);
-
-    for window in line(x, y, dest_x, dest_y).windows(2) {
-        let x1 = window[0].0;
-        let y1 = window[0].1;
-        let x2 = window[1].0;
-        let y2 = window[1].1;
-
-        if grid.swap_checked(x1, y1, x2, y2).is_none() {
-            return;
-        };
-    }
-
-    // grid.swap(x, y, dest_x, dest_y);
+    line(x, y, dest_x, dest_y)
 }
 
 fn simulate_sand(grid: &mut map::Map, x: isize, y: isize) {
-    let is_grounded = !grid.is_avalible(x, y - 1);
-    let is_occupied_left = !grid.is_avalible(x - 1, y - 1);
-    let is_occupied_right = !grid.is_avalible(x + 1, y - 1);
+    let is_occupied_down = !grid.is_avalible(x, y - 1);
+    let is_occupied_down_left = !grid.is_avalible(x - 1, y - 1);
+    let is_occupied_down_right = !grid.is_avalible(x + 1, y - 1);
 
     // dbg!(is_grounded, is_occupied_left, is_occupied_right);
 
     let partical = grid.get_mut_at(x, y).unwrap();
 
-    if is_grounded {
+    if is_occupied_down {
         partical.velocity.vy = 0.0;
 
-        match (is_occupied_left, is_occupied_right) {
+        match (is_occupied_down_left, is_occupied_down_right) {
             (true, false) => {
-                partical.velocity.vx = 1.0;
+                partical.velocity.vx += 1.0 * rand::thread_rng().gen_range(1..=3) as f32;
             }
             (false, true) => {
-                partical.velocity.vx = -1.0;
+                partical.velocity.vx += -1.0 * rand::thread_rng().gen_range(1..=3) as f32;
             }
             (false, false) => {
                 if rand::thread_rng().gen_bool(0.5) {
-                    partical.velocity.vx = 1.0;
+                    partical.velocity.vx += 1.0;
                 } else {
-                    partical.velocity.vx = -1.0;
+                    partical.velocity.vx += -1.0;
                 }
             }
             (true, true) => return,
         };
     }
 
-    apply_force(grid, x, y);
+    for window in apply_force(grid, x, y).windows(2) {
+        let (x1, y1) = (window[0].0, window[0].1);
+        let (x2, y2) = (window[1].0, window[1].1);
+
+        if let Some(p1) = grid.get_at(x1, y1) {
+            if p1.partical_type != ParticalType::Sand {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        if let Some(p2) = grid.get_at(x2, y2) {
+            if p2.partical_type != ParticalType::Air {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        if grid.swap_checked(x1, y1, x2, y2).is_some() {
+            // successfull swap and continue to next swap test
+            continue;
+        } else {
+            return;
+        };
+    }
 }
 
-fn simulate_water(_grid: &mut map::Map, _x: isize, _y: isize) {}
+fn simulate_water(grid: &mut map::Map, x: isize, y: isize) {
+    let is_occupied_down = !grid.is_avalible(x, y - 1);
+    let is_occupied_down_left = !grid.is_avalible(x - 1, y - 1);
+    let is_occupied_down_right = !grid.is_avalible(x + 1, y - 1);
+
+    let is_occupied_left = !grid.is_avalible(x - 1, y);
+    let is_occupied_right = !grid.is_avalible(x + 1, y);
+
+    // dbg!(is_grounded, is_occupied_left, is_occupied_right);
+
+    let partical = grid.get_mut_at(x, y).unwrap();
+
+    if is_occupied_down {
+        partical.velocity.vy = 0.0;
+
+        match (
+            is_occupied_left,
+            is_occupied_down_left,
+            is_occupied_down_right,
+            is_occupied_right,
+        ) {
+            (false, true, true, false) => {
+                if partical.velocity.vx == 0.0 {
+
+                    if rand::thread_rng().gen_bool(0.5) {
+                        partical.velocity.vx += 1.0;
+                    } else {
+                        partical.velocity.vx += -1.0;
+                    }
+                }  
+            }
+
+            (false, true, true, true) => {
+                partical.velocity.vx += -1.0 * rand::thread_rng().gen_range(1..=2) as f32;
+            }
+            (true, true, true, false) => {
+                partical.velocity.vx += 1.0 * rand::thread_rng().gen_range(1..=2) as f32;
+            }
+
+            (_, false, false, _) => {
+                if rand::thread_rng().gen_bool(0.5) {
+                    partical.velocity.vx += 1.0;
+                } else {
+                    partical.velocity.vx += -1.0;
+                }
+            }
+            (_, true, false, _) => {
+                partical.velocity.vx = 1.0 * rand::thread_rng().gen_range(1..=2) as f32;
+            }
+            (_, false, true, _) => {
+                partical.velocity.vx = -1.0 * rand::thread_rng().gen_range(1..=2) as f32;
+            }
+
+
+            (true, true, true, true) => return,
+        };
+    }
+
+    for window in apply_force(grid, x, y).windows(2) {
+        let (x1, y1) = (window[0].0, window[0].1);
+        let (x2, y2) = (window[1].0, window[1].1);
+
+        if let Some(p1) = grid.get_at(x1, y1) {
+            if p1.partical_type != ParticalType::Water {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        if let Some(p2) = grid.get_at(x2, y2) {
+            if p2.partical_type != ParticalType::Air {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        if grid.swap_checked(x1, y1, x2, y2).is_some() {
+            // successfull swap and continue to next swap test
+            continue;
+        } else {
+            return;
+        };
+    }
+}
 
 fn simulate_smoke(_grid: &mut map::Map, _x: isize, _y: isize) {}
 
